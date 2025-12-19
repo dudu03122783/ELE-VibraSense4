@@ -15,42 +15,34 @@ ISO 18738 and other standards suggest:
 - Vertical vibration (z) comfort limits vary but generally < 20-30 mg is good. 
 - Low frequency (1-10Hz) vibrations are most perceptible to humans.
 
-Provide a concise assessment:
-1. Status: safe, warning, or danger.
-2. Summary: A 2-sentence explanation of the ride quality.
-3. Recommendations: Bullet points on what to check (e.g., guide rails, roller guides, motor balance).
+Provide a concise assessment in JSON format:
+{
+  "status": "safe" | "warning" | "danger",
+  "summary": "2-sentence explanation of the quality",
+  "recommendations": ["bullet point 1", "bullet point 2"]
+}
 `;
 
 export const analyzeWithGemini = async (
   stats: any, 
-  fftPeak: { freq: number, mag: number },
-  userApiKey?: string,
-  userModelName?: string
+  fftPeak: { freq: number, mag: number }
 ): Promise<any> => {
   try {
-    // 安全检查环境变量，防止浏览器报错
-    const envKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
-    const apiKey = userApiKey || envKey;
-    
-    if (!apiKey) throw new Error("API Key missing");
-
-    // 使用 Gemini 3 系列模型作为默认值
-    const modelName = userModelName && userModelName.trim() !== '' ? userModelName : 'gemini-3-flash-preview';
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Strictly follow guidelines: Use process.env.API_KEY directly and initialize inside the function
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
     Analyze this elevator vibration data window:
     Axis: ${stats.axis}
-    RMS: ${stats.rms.toFixed(4)}
-    Peak Amplitude: ${stats.peakVal.toFixed(4)}
-    Dominant Frequency: ${fftPeak.freq.toFixed(2)} Hz with Magnitude ${fftPeak.mag.toFixed(2)}
+    RMS: ${stats.rms.toFixed(4)} Gals
+    Peak Amplitude: ${stats.peakVal.toFixed(4)} Gals
+    Dominant Frequency: ${fftPeak.freq.toFixed(2)} Hz with Magnitude ${fftPeak.mag.toFixed(4)}
 
-    Is this normal?
+    Is this normal based on ISO 18738? Return the result in the specified JSON format.
     `;
 
     const response = await ai.models.generateContent({
-      model: modelName,
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -64,18 +56,22 @@ export const analyzeWithGemini = async (
               type: Type.ARRAY, 
               items: { type: Type.STRING } 
             }
-          }
+          },
+          required: ['status', 'summary', 'recommendations']
         }
       }
     });
 
-    return JSON.parse(response.text || "{}");
+    // Use .text property directly as per guidelines
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+    return JSON.parse(text);
   } catch (error) {
     console.error("Gemini Analysis Failed", error);
     return {
       status: 'unknown',
-      summary: "AI Analysis unavailable. Check API Key.",
-      recommendations: ["Check network connection", "Verify API Key"]
+      summary: "AI Analysis unavailable. Please ensure process.env.API_KEY is configured correctly in the environment.",
+      recommendations: ["Check network connection", "Verify environment variables"]
     };
   }
 };
