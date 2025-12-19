@@ -28,8 +28,18 @@ export const analyzeWithGemini = async (
   fftPeak: { freq: number, mag: number }
 ): Promise<any> => {
   try {
-    // Strictly follow guidelines: Use process.env.API_KEY directly and initialize inside the function
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // 确保 API KEY 存在
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+    if (!apiKey) {
+      console.warn("API Key is missing from environment variables.");
+      return {
+        status: 'unknown',
+        summary: "API Key 缺失，AI 分析不可用。",
+        recommendations: ["请在 Zeabur 环境变量中配置 API_KEY"]
+      };
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
     Analyze this elevator vibration data window:
@@ -62,7 +72,6 @@ export const analyzeWithGemini = async (
       }
     });
 
-    // Use .text property directly as per guidelines
     const text = response.text;
     if (!text) throw new Error("Empty response from AI");
     return JSON.parse(text);
@@ -70,8 +79,8 @@ export const analyzeWithGemini = async (
     console.error("Gemini Analysis Failed", error);
     return {
       status: 'unknown',
-      summary: "AI Analysis unavailable. Please ensure process.env.API_KEY is configured correctly in the environment.",
-      recommendations: ["Check network connection", "Verify environment variables"]
+      summary: "AI 分析过程发生错误，请检查网络或 API 配置。",
+      recommendations: ["Check network connection", "Verify API_KEY settings"]
     };
   }
 };
