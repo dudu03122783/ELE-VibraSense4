@@ -1,7 +1,7 @@
 
 import React, { useRef } from 'react';
-import { parseCSV, processVibrationData } from '../utils/mathUtils';
-import { ProcessedDataPoint } from '../types';
+import { parseCSV, processVibrationData } from '../utils/mathUtils.ts';
+import { ProcessedDataPoint } from '../types.ts';
 
 interface FileUploadProps {
   onDataLoaded: (data: ProcessedDataPoint[], fileName: string) => void;

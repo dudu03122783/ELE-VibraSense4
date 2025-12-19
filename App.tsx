@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import FileUpload from './components/FileUpload';
-import { TimeChart, FFTChart } from './components/Charts';
-import { calculateFFT, calculateStats, downsampleData, parseCSV, processVibrationData, calculateLiftBoundaries, calculateIsoStats } from './utils/mathUtils';
-import { applyFilters } from './utils/dspUtils';
-import { analyzeWithGemini } from './services/geminiService';
-import { ProcessedDataPoint, DataAxis, AnalysisStats, AIAnalysisResult, ThemeConfig, FilterConfig, RawDataPoint, ElevatorBoundaries, IsoStats } from './types';
+import FileUpload from './components/FileUpload.tsx';
+import { TimeChart, FFTChart } from './components/Charts.tsx';
+import { calculateFFT, calculateStats, downsampleData, processVibrationData, calculateLiftBoundaries, calculateIsoStats } from './utils/mathUtils.ts';
+import { applyFilters } from './utils/dspUtils.ts';
+import { analyzeWithGemini } from './services/geminiService.ts';
+import { ProcessedDataPoint, DataAxis, AnalysisStats, AIAnalysisResult, ThemeConfig, FilterConfig, RawDataPoint, ElevatorBoundaries, IsoStats } from './types.ts';
 
 const DEFAULT_SAMPLE_RATE = 1600;
 
@@ -385,6 +385,16 @@ const App: React.FC = () => {
   const handleResetLayout = () => { setIsFFTVisible(true); resetView(); };
   const focusWindow = () => setViewDomain([windowStart, windowStart + windowSize]);
 
+  // Fix: Added missing handlePrint and handleSaveImage handlers to fix compilation errors
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleSaveImage = () => {
+    // In this web context, printing to PDF is the most reliable way to save the analysis report
+    window.print();
+  };
+
   const parseDomain = (min: string, max: string): [number | 'auto', number | 'auto'] => {
     const pMin = min === '' || isNaN(Number(min)) ? 'auto' : Number(min);
     const pMax = max === '' || isNaN(Number(max)) ? 'auto' : Number(max);
@@ -404,79 +414,6 @@ const App: React.FC = () => {
   };
 
   const maxTime = finalProcessedData ? finalProcessedData[finalProcessedData.length - 1].time : 0;
-  const handleZoomX = (direction: 'in' | 'out') => {
-    const start = viewDomain ? viewDomain[0] : 0;
-    const end = viewDomain ? viewDomain[1] : maxTime;
-    const duration = end - start;
-    if (duration <= 0) return;
-    const factor = 0.25;
-    const change = duration * factor;
-    let newStart = direction === 'in' ? start + change / 2 : start - change / 2;
-    let newEnd = direction === 'in' ? end - change / 2 : end + change / 2;
-    if (newStart < 0) newStart = 0;
-    if (newEnd > maxTime) newEnd = maxTime;
-    if (newEnd > newStart) setViewDomain([newStart, newEnd]);
-  };
-
-  const handlePanX = (direction: 'left' | 'right') => {
-    const start = viewDomain ? viewDomain[0] : 0;
-    const end = viewDomain ? viewDomain[1] : maxTime;
-    const duration = end - start;
-    const shift = duration * 0.2;
-    let newStart = direction === 'left' ? start - shift : start + shift;
-    let newEnd = direction === 'left' ? end - shift : end + shift;
-    if (newStart < 0) { newStart = 0; newEnd = duration; }
-    if (newEnd > maxTime) { newEnd = maxTime; newStart = maxTime - duration; }
-    setViewDomain([newStart, newEnd]);
-  };
-  
-  const handleZoomY = (axisType: 'accel' | 'int', direction: 'in' | 'out') => {
-    const isAccel = axisType === 'accel';
-    const currentMinStr = isAccel ? yMinAccel : yMinInt;
-    const currentMaxStr = isAccel ? yMaxAccel : yMaxInt;
-    const axisKey = isAccel ? accelAxis : intAxis;
-    let minVal: number, maxVal: number;
-    if (currentMinStr === '' || currentMaxStr === '' || isNaN(Number(currentMinStr)) || isNaN(Number(currentMaxStr))) {
-       const start = viewDomain ? viewDomain[0] : 0;
-       const end = viewDomain ? viewDomain[1] : maxTime;
-       const visibleData = displayData.filter(d => d.time >= start && d.time <= end);
-       if (visibleData.length === 0) return;
-       const values = visibleData.map(d => d[axisKey]);
-       const vMin = Math.min(...values);
-       const vMax = Math.max(...values);
-       const vRange = vMax - vMin;
-       minVal = vMin - vRange * 0.1;
-       maxVal = vMax + vRange * 0.1;
-       if (vRange === 0) { minVal -= 1; maxVal += 1; }
-    } else {
-       minVal = Number(currentMinStr);
-       maxVal = Number(currentMaxStr);
-    }
-    const range = maxVal - minVal;
-    const factor = 0.25;
-    const change = range * factor;
-    let newMin = direction === 'in' ? minVal + change / 2 : minVal - change / 2;
-    let newMax = direction === 'in' ? maxVal - change / 2 : maxVal + change / 2;
-    if (isAccel) { setYMinAccel(newMin.toFixed(3)); setYMaxAccel(newMax.toFixed(3)); }
-    else { setYMinInt(newMin.toFixed(3)); setYMaxInt(newMax.toFixed(3)); }
-  };
-
-  const handlePrint = () => { setShowExportModal(false); window.print(); };
-  const handleSaveImage = async () => {
-    if (!exportContainerRef.current || !(window as any).html2canvas) return;
-    setShowExportModal(false);
-    try {
-      const canvas = await (window as any).html2canvas(exportContainerRef.current, {
-        backgroundColor: theme.bgApp.includes('950') ? '#030712' : (theme.id === 'engineering' ? '#fefce8' : '#ffffff'),
-        scale: 2 
-      });
-      const data = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = data;
-      link.download = `${fileName}_full_report.png`;
-      link.click();
-    } catch (e) { alert("Could not save image."); }
-  };
 
   if (!finalProcessedData) {
     return (

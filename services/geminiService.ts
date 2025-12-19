@@ -28,18 +28,8 @@ export const analyzeWithGemini = async (
   fftPeak: { freq: number, mag: number }
 ): Promise<any> => {
   try {
-    // 确保 API KEY 存在
-    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
-    if (!apiKey) {
-      console.warn("API Key is missing from environment variables.");
-      return {
-        status: 'unknown',
-        summary: "API Key 缺失，AI 分析不可用。",
-        recommendations: ["请在 Zeabur 环境变量中配置 API_KEY"]
-      };
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
+    // Strictly follow guidelines: Use process.env.API_KEY string directly
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
     Analyze this elevator vibration data window:
