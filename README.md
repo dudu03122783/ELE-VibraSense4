@@ -1,11 +1,53 @@
-<div align="center">
+# MESE Elevator Vibration Analysis System (MESE 电梯振动分析系统)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+这是一套专为电梯工程设计的专业振动分析平台，遵循 **ISO 18738** 与 **GB/T 24474** 国际/国家标准。系统集成了高性能的信号处理算法、频谱分析模型以及基于 Google Gemini 的 AI 智能诊断功能。
 
-  <h1>Built with AI Studio</h2>
+## 核心计算逻辑与数据处理 (Data Processing)
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+### 1. 时域预处理 (Time Domain Processing)
+系统在导入 CSV 数据后，首先执行以下预处理步骤：
+- **去直流分量 (Detrending):** 计算各轴加速度的平均值并从原始序列中扣除，消除由于传感器静态偏移导致的重力分量影响。
+- **单位转换:** 将加速度单位从 **Gals (cm/s²)** 转换为 **m/s²**，以便进行后续的物理积分计算。
+- **数值积分:** 采用**梯形规则 (Trapezoidal Rule)** 进行两次积分：
+  - 一次积分：加速度 $a(t) \rightarrow$ 速度 $V_z(t)$
+  - 二次积分：速度 $v(t) \rightarrow$ 位移 $S_z(t)$
+  - 公式：$V_i = V_{i-1} + \frac{a_{i-1} + a_i}{2} \cdot \Delta t$
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+### 2. 频谱分析 (Frequency Domain - FFT)
+系统提供滑动窗口 FFT 与 匀速阶段全局 FFT：
+- **窗函数:** 应用 **Hanning Window**（汉宁窗）处理输入序列，以减少频谱泄露。
+- **幅度修正:**
+  - **ACF (Amplitude Correction Factor):** 修正因加窗导致的能量损失。
+  - **单边谱修正:** FFT 结果乘以 2（直流分量除外）以获得单边幅值谱。
+- **有效值与峰值:**
+  - 计算结果默认提供 **RMS (均方根值)** 与 **Peak (峰值)**。
+  - 关系：$\text{Peak} = \text{RMS} \times \sqrt{2} \approx \text{RMS} \times 1.414$。
+  - 系统特别针对 0.5Hz - 400Hz/800Hz 的频率区间进行监控。
 
-</div>
+### 3. ISO 18738 / GB/T 24474 标准统计
+系统自动识别电梯运行行程的四个关键边界点：
+- **$t_0$:** 运行开始（速度达到最大值的 5%）。
+- **$t_1$:** 恒速段起点（进入速度平台）。
+- **$t_2$:** 恒速段终点。
+- **$t_3$:** 运行结束。
+  
+**统计指标：**
+- **A95 Pk-Pk:** 在特定区间内，按升序排列的峰峰值中第 95 百分位的值，代表该段运行的综合舒适度水平。
+- **Max Pk-Pk ($P_{max}$):** 相邻过零点之间波峰与波谷的最大差值。
+- **Max 0-Pk:** 时间序列中的最大绝对幅值。
+
+### 4. 信号过滤 (Digital Signal Processing)
+- **Butterworth 滤波器:** 提供二阶巴特沃斯高通与低通滤波，采用双向滤波（Zero-phase filtering）算法，确保滤波后信号相位不产生偏移。
+- **Kalman 滤波器:** 集成了简单一维卡尔曼滤波，用于平滑传感器高频噪声，平衡测量精度与系统响应速度。
+
+## AI 智能诊断
+系统集成 **Google Gemini 2.5 Flash** 模型，通过将提取的振动统计特性（RMS、主频、A95 等）与行业专家经验库进行匹配，自动输出：
+- 运行安全性评估（Safe / Warning / Danger）。
+- 异常根源分析建议（如：导轨平整度、滚轮导靴磨损、曳引机动平衡等）。
+
+## 开发者与技术支持
+- **制作者:** chaizhh@mese-cn.com
+- **数据兼容:** 深度适配 SMEC 便携式震动仪及钉钉“智能震动测量分析”软件导出的 CSV 数据。
+
+---
+*注：本系统计算结果仅供工程参考，重大安全判定请结合现场人工检测。*
