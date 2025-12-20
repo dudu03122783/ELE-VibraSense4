@@ -58,16 +58,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
           <div className="relative">
             <div className="absolute -inset-4 bg-gradient-to-r from-teal-500/20 to-blue-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <img 
-              src="./logo.png"
-              alt="Upload Logo" 
-              className="relative w-52 h-52 rounded-full border-4 border-gray-800 bg-gray-900 object-contain p-4 shadow-2xl transition-transform duration-500 group-hover:scale-105"
-              onError={(e) => {
-                // 如果 logo.png 加载失败，回退到 /logo.png
-                const target = e.target as HTMLImageElement;
-                if (!target.src.endsWith('/logo.png')) {
-                  target.src = '/logo.png';
-                }
-              }}
+              src="/logo.png"
+              alt="MESE Logo" 
+              className="relative w-52 h-52 rounded-full border-4 border-gray-800 bg-gray-950 object-contain p-4 shadow-2xl transition-transform duration-500 group-hover:scale-105"
             />
           </div>
           <div className="flex flex-col items-center space-y-2 text-center">

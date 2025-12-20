@@ -391,27 +391,27 @@ const App: React.FC = () => {
 
   const handleSaveImage = async () => {
     const container = exportContainerRef.current;
-    if (!container || ! (window as any).html2canvas) return;
+    if (!container || !(window as any).html2canvas) return;
     
     setIsAnalyzing(true);
     
     try {
-      // 临时显示容器以便 html2canvas 渲染
+      // Temporarily show container for html2canvas to render SVG/Canvas elements
+      // We move it to x=0 but keep it invisible to user via opacity/positioning
       const originalLeft = container.style.left;
       const originalVisibility = container.style.visibility;
       
-      // 我们不使用 display: none 而是使用 visibility，确保布局引擎能计算它
       container.style.left = '0';
       container.style.visibility = 'visible';
       container.style.zIndex = '9999';
 
       const canvas = await (window as any).html2canvas(container, {
         backgroundColor: '#030712',
-        scale: 2, // 高清导出
+        scale: 2, 
         useCORS: true,
         logging: false,
         onclone: (clonedDoc: Document) => {
-          const clonedContainer = clonedDoc.querySelector('[ref="exportContainerRef"]') as HTMLElement;
+          const clonedContainer = clonedDoc.querySelector('[data-export-container="true"]') as HTMLElement;
           if (clonedContainer) {
             clonedContainer.style.visibility = 'visible';
             clonedContainer.style.left = '0';
@@ -419,20 +419,20 @@ const App: React.FC = () => {
         }
       });
 
-      // 还原样式
+      // Restore original state
       container.style.left = originalLeft;
       container.style.visibility = originalVisibility;
       container.style.zIndex = '-50';
 
       const link = document.createElement('a');
-      link.download = `MESE_Vibration_Report_${fileName.split('.')[0] || 'export'}.png`;
+      link.download = `MESE_Vibration_Analysis_${fileName.split('.')[0] || 'Report'}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
       
       setShowExportModal(false);
     } catch (err) {
       console.error("Export failed:", err);
-      alert("保存失败，请检查浏览器是否阻止了弹出窗口或稍后重试。");
+      alert("报告保存失败，请检查浏览器设置或尝试直接打印。");
     } finally {
       setIsAnalyzing(false);
     }
@@ -647,6 +647,7 @@ const App: React.FC = () => {
                         <option value="1000" className="bg-gray-900 text-gray-100">1000</option>
                         <option value="800" className="bg-gray-900 text-gray-100">800</option>
                         <option value="512" className="bg-gray-900 text-gray-100">512</option>
+                        <option value="500" className="bg-gray-900 text-gray-100">500</option>
                         <option value="256" className="bg-gray-900 text-gray-100">256</option>
                         <option value="250" className="bg-gray-900 text-gray-100">250</option>
                         <option value="128" className="bg-gray-900 text-gray-100">128</option>
@@ -725,7 +726,7 @@ const App: React.FC = () => {
             )}
         </div>
 
-      {/* --- EXPORT FULL REPORT CONTAINER (HIDDEN) --- */}
+      {/* --- EXPORT FULL REPORT CONTAINER (HIDDEN BUT CAPTURABLE) --- */}
       <div 
         ref={exportContainerRef} 
         data-export-container="true"
@@ -734,9 +735,14 @@ const App: React.FC = () => {
       >
         <div className="p-8 space-y-8 bg-gray-950">
            <div className="border-b border-gray-700 pb-4 mb-8">
-             <h1 className="text-3xl font-bold">Vibration Analysis Report (全套分析报告)</h1>
-             <p className="text-xl opacity-70 mt-2">{fileName}</p>
-             <p className="text-sm opacity-50 mt-1">{new Date().toLocaleString()}</p>
+             <div className="flex justify-between items-center">
+               <div>
+                 <h1 className="text-3xl font-bold">Vibration Analysis Report (全套分析报告)</h1>
+                 <p className="text-xl opacity-70 mt-2">{fileName}</p>
+                 <p className="text-sm opacity-50 mt-1">{new Date().toLocaleString()}</p>
+               </div>
+               <img src="/logo.png" className="h-16 w-16 object-contain" />
+             </div>
            </div>
 
            {/* Vibration Block: AX, AY, AZ */}
