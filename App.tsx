@@ -390,40 +390,51 @@ const App: React.FC = () => {
   };
 
   const handleSaveImage = async () => {
-    if (!exportContainerRef.current) return;
+    const container = exportContainerRef.current;
+    if (!container || ! (window as any).html2canvas) return;
+    
     setIsAnalyzing(true);
+    
     try {
-      // 确保 html2canvas 可用且容器已经存在于 DOM 中
-      // 由于容器是 fixed 且 left -9999px，我们暂时将其移入可视区域进行截图
-      const container = exportContainerRef.current;
+      // 临时显示容器以便 html2canvas 渲染
       const originalLeft = container.style.left;
+      const originalVisibility = container.style.visibility;
+      
+      // 我们不使用 display: none 而是使用 visibility，确保布局引擎能计算它
       container.style.left = '0';
       container.style.visibility = 'visible';
       container.style.zIndex = '9999';
 
       const canvas = await (window as any).html2canvas(container, {
         backgroundColor: '#030712',
-        scale: 2, 
+        scale: 2, // 高清导出
         useCORS: true,
         logging: false,
-        allowTaint: true
+        onclone: (clonedDoc: Document) => {
+          const clonedContainer = clonedDoc.querySelector('[ref="exportContainerRef"]') as HTMLElement;
+          if (clonedContainer) {
+            clonedContainer.style.visibility = 'visible';
+            clonedContainer.style.left = '0';
+          }
+        }
       });
 
       // 还原样式
       container.style.left = originalLeft;
-      container.style.visibility = 'hidden';
+      container.style.visibility = originalVisibility;
       container.style.zIndex = '-50';
 
       const link = document.createElement('a');
-      link.download = `MESE_Analysis_Report_${fileName.split('.')[0]}.png`;
+      link.download = `MESE_Vibration_Report_${fileName.split('.')[0] || 'export'}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
+      
+      setShowExportModal(false);
     } catch (err) {
-      console.error("Export failed", err);
-      alert("报告导出失败，请尝试直接打印预览。");
+      console.error("Export failed:", err);
+      alert("保存失败，请检查浏览器是否阻止了弹出窗口或稍后重试。");
     } finally {
       setIsAnalyzing(false);
-      setShowExportModal(false);
     }
   };
 
@@ -630,12 +641,16 @@ const App: React.FC = () => {
                         <option value="5000" className="bg-gray-900 text-gray-100">5000</option>
                         <option value="4096" className="bg-gray-900 text-gray-100">4096</option>
                         <option value="2048" className="bg-gray-900 text-gray-100">2048</option>
+                        <option value="2000" className="bg-gray-900 text-gray-100">2000</option>
                         <option value="1600" className="bg-gray-900 text-gray-100">1600</option>
                         <option value="1024" className="bg-gray-900 text-gray-100">1024</option>
+                        <option value="1000" className="bg-gray-900 text-gray-100">1000</option>
                         <option value="800" className="bg-gray-900 text-gray-100">800</option>
                         <option value="512" className="bg-gray-900 text-gray-100">512</option>
                         <option value="256" className="bg-gray-900 text-gray-100">256</option>
+                        <option value="250" className="bg-gray-900 text-gray-100">250</option>
                         <option value="128" className="bg-gray-900 text-gray-100">128</option>
+                        <option value="125" className="bg-gray-900 text-gray-100">125</option>
                       </select>
                     </div>
                  </div>
@@ -711,7 +726,12 @@ const App: React.FC = () => {
         </div>
 
       {/* --- EXPORT FULL REPORT CONTAINER (HIDDEN) --- */}
-      <div ref={exportContainerRef} className={`fixed top-0 left-0 -z-50 pointer-events-none ${theme.bgApp} ${theme.textPrimary}`} style={{ width: '1200px', left: '-9999px', visibility: 'hidden' }} >
+      <div 
+        ref={exportContainerRef} 
+        data-export-container="true"
+        className={`fixed top-0 left-0 -z-50 pointer-events-none ${theme.bgApp} ${theme.textPrimary}`} 
+        style={{ width: '1200px', left: '-9999px', visibility: 'hidden' }} 
+      >
         <div className="p-8 space-y-8 bg-gray-950">
            <div className="border-b border-gray-700 pb-4 mb-8">
              <h1 className="text-3xl font-bold">Vibration Analysis Report (全套分析报告)</h1>
