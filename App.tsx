@@ -24,8 +24,8 @@ const TRANSLATIONS = {
     constVelFFT: '匀速阶段全局FFT',
     viewControl: '视图 / 缩放控制',
     chartHeight: '图表高度',
-    aiDiag: 'AI 智能诊断',
-    analyzing: '分析中...',
+    aiDiag: '智能诊断',
+    analyzing: '计算中...',
     kinematics: '运动学',
     vibration: '振动',
     fft: '频谱分析',
@@ -91,8 +91,8 @@ const TRANSLATIONS = {
     constVelFFT: 'Const Vel Global FFT',
     viewControl: 'View / Zoom Control',
     chartHeight: 'Chart Height',
-    aiDiag: 'AI Diagnostics',
-    analyzing: 'Analyzing...',
+    aiDiag: 'Diagnostics',
+    analyzing: 'Computing...',
     kinematics: 'KINEMATICS',
     vibration: 'VIBRATION',
     fft: 'FREQUENCY ANALYSIS',
@@ -359,6 +359,7 @@ const App: React.FC = () => {
   const handleRunAI = async () => {
     if (!windowStats || !peakFreq) return;
     setIsAnalyzing(true);
+    // Stubbed service ensures no API key errors or external dependency issues on Zeabur
     const result = await analyzeWithGemini(
       { ...windowStats, axis: accelAxis }, 
       peakFreq
@@ -385,13 +386,11 @@ const App: React.FC = () => {
   const handleResetLayout = () => { setIsFFTVisible(true); resetView(); };
   const focusWindow = () => setViewDomain([windowStart, windowStart + windowSize]);
 
-  // Fix: Added missing handlePrint and handleSaveImage handlers to fix compilation errors
   const handlePrint = () => {
     window.print();
   };
 
   const handleSaveImage = () => {
-    // In this web context, printing to PDF is the most reliable way to save the analysis report
     window.print();
   };
 
