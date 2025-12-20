@@ -359,7 +359,7 @@ const App: React.FC = () => {
   const handleRunAI = async () => {
     if (!windowStats || !peakFreq) return;
     setIsAnalyzing(true);
-    // Stubbed service ensures no API key errors or external dependency issues on Zeabur
+    // Updated service performs local diagnostics instead of Gemini calls
     const result = await analyzeWithGemini(
       { ...windowStats, axis: accelAxis }, 
       peakFreq

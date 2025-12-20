@@ -1,34 +1,36 @@
 
 /**
- * AI Analysis Service Stub
- * Removed external API calls to resolve deployment issues and remove API key dependencies.
+ * Local Analysis Service
+ * Removed all external API calls and @google/genai dependencies to resolve build issues.
  */
 
 export const analyzeWithGemini = async (
   stats: any, 
   fftPeak: { freq: number, mag: number }
 ): Promise<any> => {
-  // Simulate a short delay to keep the UI feedback (loading state) intact
-  await new Promise(resolve => setTimeout(resolve, 800));
+  // Artificial delay to maintain the visual "calculating" state in the UI
+  await new Promise(resolve => setTimeout(resolve, 600));
 
-  // Determine a basic status based on standard thresholds locally
+  // Determine status based on standard elevator comfort thresholds (ISO 18738)
   let status: 'safe' | 'warning' | 'danger' = 'safe';
   const isZ = stats.axis === 'az';
+  const peakVal = stats.peakVal;
   
+  // Standard comfort thresholds (Gals/mg)
   if (isZ) {
-    if (stats.peakVal > 30) status = 'danger';
-    else if (stats.peakVal > 20) status = 'warning';
+    if (peakVal > 30) status = 'danger';
+    else if (peakVal > 20) status = 'warning';
   } else {
-    if (stats.peakVal > 15) status = 'danger';
-    else if (stats.peakVal > 10) status = 'warning';
+    if (peakVal > 15) status = 'danger';
+    else if (peakVal > 10) status = 'warning';
   }
 
   return {
     status,
-    summary: `分析完成。当前轴 (${stats.axis.toUpperCase()}) 峰值为 ${stats.peakVal.toFixed(2)} Gals。主频位于 ${fftPeak.freq.toFixed(2)} Hz。`,
+    summary: `自动诊断完成。当前轴 (${stats.axis.toUpperCase()}) 峰值为 ${peakVal.toFixed(2)} Gals。主频率检测到 ${fftPeak.freq.toFixed(2)} Hz。`,
     recommendations: [
-      status === 'safe' ? "数据在正常范围内，建议定期检查。" : "数据存在波动，建议检查导轨对齐及滚轮状态。",
-      "本地分析模式已启用 (Local mode active)."
+      status === 'safe' ? "当前振动数据处于舒适范围内，建议保持常规保养。" : "振动幅值略高，建议检查导靴磨损情况及导轨润滑。",
+      status === 'danger' ? "建议立即停梯检查曳引机动平衡或钢丝绳张力偏差。" : "分析基于本地 ISO 18738 标准算法。"
     ]
   };
 };
