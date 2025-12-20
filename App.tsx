@@ -64,8 +64,8 @@ const TRANSLATIONS = {
     exportTitle: '导出选项',
     selectCharts: '选择图表',
     selectAll: '全选',
-    print: '打印',
-    saveImage: '保存全套分析报告',
+    print: '打印预览 (Print)',
+    saveImage: '保存全套分析报告 (PNG)',
     cancel: '取消',
     showChart: '显示图表',
     hideChart: '隐藏图表',
@@ -131,8 +131,8 @@ const TRANSLATIONS = {
     exportTitle: 'Export Options',
     selectCharts: 'Select Charts',
     selectAll: 'Select All',
-    print: 'Print',
-    saveImage: 'Save Full Report',
+    print: 'Print Preview',
+    saveImage: 'Save Full Report (PNG)',
     cancel: 'Cancel',
     showChart: 'Show Chart',
     hideChart: 'Hide Chart',
@@ -359,7 +359,6 @@ const App: React.FC = () => {
   const handleRunAI = async () => {
     if (!windowStats || !peakFreq) return;
     setIsAnalyzing(true);
-    // Updated service performs local diagnostics instead of Gemini calls
     const result = await analyzeWithGemini(
       { ...windowStats, axis: accelAxis }, 
       peakFreq
@@ -390,8 +389,42 @@ const App: React.FC = () => {
     window.print();
   };
 
-  const handleSaveImage = () => {
-    window.print();
+  const handleSaveImage = async () => {
+    if (!exportContainerRef.current) return;
+    setIsAnalyzing(true);
+    try {
+      // 确保 html2canvas 可用且容器已经存在于 DOM 中
+      // 由于容器是 fixed 且 left -9999px，我们暂时将其移入可视区域进行截图
+      const container = exportContainerRef.current;
+      const originalLeft = container.style.left;
+      container.style.left = '0';
+      container.style.visibility = 'visible';
+      container.style.zIndex = '9999';
+
+      const canvas = await (window as any).html2canvas(container, {
+        backgroundColor: '#030712',
+        scale: 2, 
+        useCORS: true,
+        logging: false,
+        allowTaint: true
+      });
+
+      // 还原样式
+      container.style.left = originalLeft;
+      container.style.visibility = 'hidden';
+      container.style.zIndex = '-50';
+
+      const link = document.createElement('a');
+      link.download = `MESE_Analysis_Report_${fileName.split('.')[0]}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      console.error("Export failed", err);
+      alert("报告导出失败，请尝试直接打印预览。");
+    } finally {
+      setIsAnalyzing(false);
+      setShowExportModal(false);
+    }
   };
 
   const parseDomain = (min: string, max: string): [number | 'auto', number | 'auto'] => {
@@ -482,14 +515,16 @@ const App: React.FC = () => {
           <div className={`${theme.bgPanel} border ${theme.border} rounded-xl shadow-2xl p-6 w-80`}>
             <h3 className="text-lg font-bold mb-4">{t.exportTitle}</h3>
             <div className="space-y-3 mb-6">
-               <div className="text-xs text-gray-500 italic mb-2">* {lang === 'zh' ? '保存图片将导出包含所有轴、频谱和运动学的完整报告。' : 'Save Image will export a full report.'}</div>
+               <div className="text-xs text-gray-500 italic mb-2">* {lang === 'zh' ? '保存报告将包含 AX, AY, AZ, FFT, VZ, SZ 完整内容。' : 'Report will include AX, AY, AZ, FFT, VZ, SZ content.'}</div>
                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={exportSelection.vibration} onChange={e => setExportSelection({...exportSelection, vibration: e.target.checked})}/><span className="text-sm">{t.vibration}</span></label>
                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={exportSelection.fft} onChange={e => setExportSelection({...exportSelection, fft: e.target.checked})}/><span className="text-sm">{t.fft}</span></label>
                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={exportSelection.kinematics} onChange={e => setExportSelection({...exportSelection, kinematics: e.target.checked})}/><span className="text-sm">{t.kinematics}</span></label>
             </div>
             <div className="space-y-2">
               <button onClick={handlePrint} className={`w-full py-2 rounded font-bold ${theme.bgCard} border ${theme.border} hover:bg-white/5`}>{t.print}</button>
-              <button onClick={handleSaveImage} className={`w-full py-2 rounded font-bold bg-teal-600 hover:bg-teal-500 text-white`}>{t.saveImage}</button>
+              <button onClick={handleSaveImage} disabled={isAnalyzing} className={`w-full py-2 rounded font-bold bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-50`}>
+                {isAnalyzing ? t.analyzing : t.saveImage}
+              </button>
               <button onClick={() => setShowExportModal(false)} className={`w-full py-2 rounded text-sm ${theme.textSecondary} hover:text-white`}>{t.cancel}</button>
             </div>
           </div>
@@ -590,7 +625,18 @@ const App: React.FC = () => {
                     <label className="text-[10px] text-gray-500 block mb-1">{t.sampleRate}</label>
                     <div className="flex gap-2">
                       <input type="number" min="1" max="10000" value={sampleRate} onChange={(e) => setSampleRate(Number(e.target.value))} className={`w-full text-xs p-1.5 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`}/>
-                      <select value="" onChange={(e) => { if(e.target.value) setSampleRate(Number(e.target.value)); }} className={`w-20 text-xs p-1.5 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`}><option value="" className="bg-gray-900 text-gray-100">Pre...</option><option value="1600" className="bg-gray-900 text-gray-100">1600</option><option value="1024" className="bg-gray-900 text-gray-100">1024</option><option value="800" className="bg-gray-900 text-gray-100">800</option></select>
+                      <select value="" onChange={(e) => { if(e.target.value) setSampleRate(Number(e.target.value)); }} className={`w-20 text-xs p-1.5 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`}>
+                        <option value="" className="bg-gray-900 text-gray-100">Pre...</option>
+                        <option value="5000" className="bg-gray-900 text-gray-100">5000</option>
+                        <option value="4096" className="bg-gray-900 text-gray-100">4096</option>
+                        <option value="2048" className="bg-gray-900 text-gray-100">2048</option>
+                        <option value="1600" className="bg-gray-900 text-gray-100">1600</option>
+                        <option value="1024" className="bg-gray-900 text-gray-100">1024</option>
+                        <option value="800" className="bg-gray-900 text-gray-100">800</option>
+                        <option value="512" className="bg-gray-900 text-gray-100">512</option>
+                        <option value="256" className="bg-gray-900 text-gray-100">256</option>
+                        <option value="128" className="bg-gray-900 text-gray-100">128</option>
+                      </select>
                     </div>
                  </div>
                  <p className="text-[10px] text-gray-500 italic leading-tight">{t.sampleRateNote}</p>
@@ -664,19 +710,93 @@ const App: React.FC = () => {
             )}
         </div>
 
-      <div ref={exportContainerRef} className={`fixed top-0 left-0 -z-50 pointer-events-none ${theme.bgApp} ${theme.textPrimary}`} style={{ width: '1200px', left: '-9999px' }} >
-        <div className="p-8 space-y-8">
-           <div className="border-b border-gray-700 pb-4 mb-8"><h1 className="text-3xl font-bold">Vibration Analysis Report</h1><p className="text-xl opacity-70 mt-2">{fileName}</p><p className="text-sm opacity-50 mt-1">{new Date().toLocaleString()}</p></div>
+      {/* --- EXPORT FULL REPORT CONTAINER (HIDDEN) --- */}
+      <div ref={exportContainerRef} className={`fixed top-0 left-0 -z-50 pointer-events-none ${theme.bgApp} ${theme.textPrimary}`} style={{ width: '1200px', left: '-9999px', visibility: 'hidden' }} >
+        <div className="p-8 space-y-8 bg-gray-950">
+           <div className="border-b border-gray-700 pb-4 mb-8">
+             <h1 className="text-3xl font-bold">Vibration Analysis Report (全套分析报告)</h1>
+             <p className="text-xl opacity-70 mt-2">{fileName}</p>
+             <p className="text-sm opacity-50 mt-1">{new Date().toLocaleString()}</p>
+           </div>
+
+           {/* Vibration Block: AX, AY, AZ */}
            {['ax', 'ay', 'az'].map((axis) => {
              let stats: { constVel?: AnalysisStats, global?: AnalysisStats } = {};
-             if (isoStats) { if (axis === 'ax') stats.constVel = isoStats.x.constVel; if (axis === 'ay') stats.constVel = isoStats.y.constVel; if (axis === 'az') stats.constVel = isoStats.z.constVel; }
-             if (finalProcessedData && boundaries && boundaries.isValid) { stats.global = calculateStats(finalProcessedData, axis as DataAxis, boundaries.t0, boundaries.t3); }
+             if (isoStats) { 
+               if (axis === 'ax') stats.constVel = isoStats.x.constVel; 
+               if (axis === 'ay') stats.constVel = isoStats.y.constVel; 
+               if (axis === 'az') { stats.constVel = isoStats.z.constVel; stats.global = isoStats.z.global; }
+             }
+             if (!stats.global && finalProcessedData && axis !== 'az') {
+                stats.global = calculateStats(finalProcessedData, axis as DataAxis);
+             }
+
              return (
-              <div key={axis} className="h-[420px] border border-gray-700/50 rounded-xl p-4 bg-black/5 flex flex-col"><h3 className="text-lg font-bold mb-2 uppercase flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{backgroundColor: theme.chartColors[axis as DataAxis]}}></span>Vibration {axis.toUpperCase()}</h3><div className="grid grid-cols-5 gap-4 mb-4 text-xs">{stats.constVel && (<><div className="flex flex-col border-l-2 border-blue-500 pl-2"><span className="opacity-60 font-bold mb-1">恒速区 (t1-t2)</span></div><div className="flex flex-col"><span className="opacity-50">A95 峰峰值</span><span className="font-mono text-sm font-bold">{stats.constVel.a95.toFixed(3)}</span></div><div className="flex flex-col"><span className="opacity-50">Max Pk-Pk</span><span className="font-mono text-sm font-bold">{stats.constVel.pkPk.toFixed(3)}</span></div><div className="flex flex-col"><span className="opacity-50">Max 0-Pk</span><span className="font-mono text-sm font-bold">{stats.constVel.zeroPk.toFixed(3)}</span></div></>)}{stats.global && (<div className="flex flex-col border-l border-gray-700 pl-2"><span className="opacity-60 font-bold mb-1">全过程 (t0-t3)</span><div className="flex gap-4"><div className="flex flex-col"><span className="opacity-50">Max Pk-Pk</span><span className="text-sm font-mono font-bold text-yellow-500">{stats.global.pkPk.toFixed(3)}</span></div><div className="flex flex-col"><span className="opacity-50">Max 0-Pk</span><span className="text-sm font-mono font-bold">{stats.global.zeroPk.toFixed(3)}</span></div></div></div>)}</div><div className="flex-1 min-h-0"><TimeChart data={displayData} axis={axis as DataAxis} color={theme.chartColors[axis as DataAxis]} globalStats={axis === 'az' ? { ...stats.constVel!, pkPk: stats.global?.pkPk || 0, maxPkPkPair: stats.global?.maxPkPkPair } : stats.constVel} windowRange={{ start: windowStart, end: windowStart + windowSize }} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/></div></div>
+              <div key={axis} className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col mb-8 min-h-[500px]">
+                <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">
+                  <span className="w-4 h-4 rounded-sm" style={{backgroundColor: theme.chartColors[axis as DataAxis]}}></span>
+                  Vibration {axis.toUpperCase()}
+                </h3>
+                <div className="grid grid-cols-4 gap-6 mb-6 text-xs p-4 bg-white/5 rounded-lg">
+                   <div className="flex flex-col border-l-2 border-teal-500 pl-3">
+                     <span className="opacity-60 font-bold mb-1">{t.t1t2} (Const Vel)</span>
+                     <div className="space-y-1">
+                       <div className="flex justify-between"><span>A95:</span><span className="font-mono font-bold">{stats.constVel?.a95.toFixed(3)}</span></div>
+                       <div className="flex justify-between"><span>Max Pk-Pk:</span><span className="font-mono font-bold">{stats.constVel?.pkPk.toFixed(3)}</span></div>
+                       <div className="flex justify-between"><span>Max 0-Pk:</span><span className="font-mono font-bold">{stats.constVel?.zeroPk.toFixed(3)}</span></div>
+                     </div>
+                   </div>
+                   <div className="flex flex-col border-l-2 border-yellow-500 pl-3">
+                     <span className="opacity-60 font-bold mb-1">{t.t0t3} (Global Max)</span>
+                     <div className="space-y-1">
+                       <div className="flex justify-between"><span>Max Pk-Pk:</span><span className="font-mono font-bold text-yellow-500">{stats.global?.pkPk.toFixed(3)}</span></div>
+                       <div className="flex justify-between"><span>Max 0-Pk:</span><span className="font-mono font-bold">{stats.global?.zeroPk.toFixed(3)}</span></div>
+                     </div>
+                   </div>
+                </div>
+                <div className="h-[350px] w-full">
+                  <TimeChart 
+                    data={displayData} 
+                    axis={axis as DataAxis} 
+                    color={theme.chartColors[axis as DataAxis]} 
+                    globalStats={axis === 'az' ? { ...stats.constVel!, pkPk: stats.global?.pkPk || 0, maxPkPkPair: stats.global?.maxPkPkPair } : stats.constVel} 
+                    verticalLines={isoVerticalLines} 
+                    highlightAreas={isoHighlightAreas} 
+                    gridColor={theme.gridColor} 
+                    textColor={theme.textColorHex}
+                  />
+                </div>
+              </div>
             );
            })}
-           <div className="h-[380px] border border-gray-700/50 rounded-xl p-4 bg-black/5 flex flex-col"><h3 className="text-lg font-bold mb-4 uppercase flex items-center gap-2">FFT Analysis ({accelAxis.toUpperCase()})</h3>{windowStats && peakFreq && (<div className="grid grid-cols-4 gap-4 mb-4 text-xs border-b border-gray-800 pb-4"><div className="flex flex-col"><span className="opacity-50">RMS</span><span className="font-mono text-lg font-bold">{windowStats.rms.toFixed(3)}</span></div><div className="flex flex-col"><span className="opacity-50">Peak</span><span className="font-mono text-lg font-bold">{windowStats.peakVal.toFixed(3)}</span></div><div className="flex flex-col"><span className="opacity-50">Dominant Freq</span><span className="font-mono text-lg font-bold text-purple-400">{peakFreq.freq.toFixed(2)} Hz</span></div><div className="flex flex-col"><span className="opacity-50">Magnitude</span><span className="font-mono text-lg font-bold">{(peakFreq.mag * 1.4142).toFixed(4)}</span></div></div>)}<div className="flex-1 min-h-0"><FFTChart data={fftData} color={theme.chartColors[accelAxis]} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode}/></div></div>
-           {['vz', 'sz'].map((axis) => <div key={axis} className="h-80 border border-gray-700/50 rounded-xl p-4 bg-black/5 flex flex-col"><h3 className="text-lg font-bold mb-2 uppercase flex items-center gap-2"><span className="w-3 h-3 rounded-sm" style={{backgroundColor: theme.chartColors[axis as DataAxis]}}></span>{axis === 'vz' ? 'Velocity (Vz)' : 'Displacement (Sz)'}</h3><div className="flex-1 min-h-0"><TimeChart data={displayData} axis={axis as DataAxis} color={theme.chartColors[axis as DataAxis]} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/></div></div>)}
+
+           {/* FFT Block */}
+           <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col mb-8 min-h-[500px]">
+             <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">FFT Frequency Analysis ({accelAxis.toUpperCase()})</h3>
+             {windowStats && peakFreq && (
+               <div className="grid grid-cols-4 gap-6 mb-6 text-xs p-4 bg-white/5 rounded-lg">
+                 <div className="flex flex-col"><span className="opacity-50">RMS (aw)</span><span className="font-mono text-lg font-bold">{windowStats.rms.toFixed(3)}</span></div>
+                 <div className="flex flex-col"><span className="opacity-50">Peak</span><span className="font-mono text-lg font-bold">{windowStats.peakVal.toFixed(3)}</span></div>
+                 <div className="flex flex-col"><span className="opacity-50">Dominant Freq</span><span className="font-mono text-lg font-bold text-purple-400">{peakFreq.freq.toFixed(2)} Hz</span></div>
+                 <div className="flex flex-col"><span className="opacity-50">Magnitude</span><span className="font-mono text-lg font-bold">{(peakFreq.mag * 1.4142).toFixed(4)}</span></div>
+               </div>
+             )}
+             <div className="h-[400px] w-full">
+               <FFTChart data={fftData} color={theme.chartColors[accelAxis]} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode}/>
+             </div>
+           </div>
+
+           {/* Kinematics Block: VZ, SZ */}
+           <div className="space-y-8">
+             <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col h-[400px]">
+               <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">Velocity (Vz)</h3>
+               <TimeChart data={displayData} axis="vz" color={theme.chartColors.vz} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/>
+             </div>
+             <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col h-[400px]">
+               <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">Displacement (Sz)</h3>
+               <TimeChart data={displayData} axis="sz" color={theme.chartColors.sz} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/>
+             </div>
+           </div>
         </div>
       </div>
       </main>

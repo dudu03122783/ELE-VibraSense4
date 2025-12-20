@@ -58,7 +58,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
           <div className="relative">
             <div className="absolute -inset-4 bg-gradient-to-r from-teal-500/20 to-blue-500/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <img 
-              src="https://api.dicebear.com/9.x/avataaars/svg?seed=MESE"
+              src="/logo.png"
               alt="Upload Logo" 
               className="relative w-52 h-52 rounded-full border-4 border-gray-800 bg-gray-900 object-contain p-4 shadow-2xl transition-transform duration-500 group-hover:scale-105"
             />
@@ -68,7 +68,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
               上传 振动数据
             </span>
             <span className="text-xs font-bold text-teal-500 tracking-[0.2em] font-mono uppercase opacity-90">
-              Upload Vibration Data
+              UPLOAD VIBRATION DATA
             </span>
             <span className="text-[10px] text-gray-500 font-mono mt-2 pt-2 border-t border-gray-800/50 w-full max-w-[150px]">
               Supports .csv (ax, ay, az)

@@ -1,22 +1,22 @@
 
 /**
- * Local Analysis Service
- * Removed all external API calls and @google/genai dependencies to resolve build issues.
+ * Local Analysis Service (Standalone)
+ * Removed external API calls and @google/genai dependencies.
  */
 
 export const analyzeWithGemini = async (
   stats: any, 
   fftPeak: { freq: number, mag: number }
 ): Promise<any> => {
-  // Artificial delay to maintain the visual "calculating" state in the UI
-  await new Promise(resolve => setTimeout(resolve, 600));
+  // Simulate processing time
+  await new Promise(resolve => setTimeout(resolve, 800));
 
-  // Determine status based on standard elevator comfort thresholds (ISO 18738)
+  // Diagnostic logic based on ISO 18738 standards
   let status: 'safe' | 'warning' | 'danger' = 'safe';
-  const isZ = stats.axis === 'az';
   const peakVal = stats.peakVal;
+  const isZ = stats.axis === 'az';
   
-  // Standard comfort thresholds (Gals/mg)
+  // Vertical axis (Z) is typically more strictly monitored
   if (isZ) {
     if (peakVal > 30) status = 'danger';
     else if (peakVal > 20) status = 'warning';
@@ -27,10 +27,10 @@ export const analyzeWithGemini = async (
 
   return {
     status,
-    summary: `自动诊断完成。当前轴 (${stats.axis.toUpperCase()}) 峰值为 ${peakVal.toFixed(2)} Gals。主频率检测到 ${fftPeak.freq.toFixed(2)} Hz。`,
+    summary: `分析完成 (本地模式)。检测到 ${stats.axis.toUpperCase()} 轴峰值为 ${peakVal.toFixed(2)} Gals。振动主频为 ${fftPeak.freq.toFixed(2)} Hz。`,
     recommendations: [
-      status === 'safe' ? "当前振动数据处于舒适范围内，建议保持常规保养。" : "振动幅值略高，建议检查导靴磨损情况及导轨润滑。",
-      status === 'danger' ? "建议立即停梯检查曳引机动平衡或钢丝绳张力偏差。" : "分析基于本地 ISO 18738 标准算法。"
+      status === 'safe' ? "当前振动数据优良，建议保持季度检查。" : "振动指标偏高，建议检查导靴张力与导轨平整度。",
+      status === 'danger' ? "检测到异常振动，请检查曳引机动平衡及轿底隔离垫。" : "参考标准：ISO 18738 / GB/T 24474。"
     ]
   };
 };
