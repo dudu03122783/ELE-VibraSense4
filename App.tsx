@@ -293,8 +293,9 @@ const App: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSelection, setExportSelection] = useState({ vibration: true, fft: true, kinematics: true });
   const [isFFTVisible, setIsFFTVisible] = useState(true);
+  
   const chartsContainerRef = useRef<HTMLDivElement>(null);
-  const exportContainerRef = useRef<HTMLDivElement>(null);
+  const exportContainerRef = useRef<HTMLDivElement>(null); // Ref for the hidden export container
 
   const handleFileLoad = (processed: ProcessedDataPoint[], name: string) => {
     const raw: RawDataPoint[] = processed.map(p => ({ time: p.time, ax: p.ax, ay: p.ay, az: p.az }));
@@ -358,6 +359,16 @@ const App: React.FC = () => {
     const endIndex = Math.floor((windowStart + windowSize) * sampleRate);
     return finalProcessedData.slice(startIndex, Math.min(endIndex, finalProcessedData.length));
   }, [finalProcessedData, fftMode, boundaries, windowStart, windowSize, sampleRate]);
+
+  // Compute FFT for all axes for the export feature
+  const allFFTs = useMemo(() => {
+    if (fftSourceData.length === 0) return null;
+    return {
+      ax: calculateFFT(fftSourceData.map(d => d.ax), sampleRate),
+      ay: calculateFFT(fftSourceData.map(d => d.ay), sampleRate),
+      az: calculateFFT(fftSourceData.map(d => d.az), sampleRate)
+    };
+  }, [fftSourceData, sampleRate]);
 
   const currentGlobalStats = useMemo(() => {
     if (!isoStats) return null;
@@ -441,33 +452,20 @@ const App: React.FC = () => {
     setIsAnalyzing(true);
     
     try {
-      // Temporarily show container for html2canvas to render SVG/Canvas elements
-      // We move it to x=0 but keep it invisible to user via opacity/positioning
-      const originalLeft = container.style.left;
-      const originalVisibility = container.style.visibility;
-      
-      container.style.left = '0';
-      container.style.visibility = 'visible';
-      container.style.zIndex = '9999';
+      // Determine background color based on theme
+      let bgColor = '#030712'; // Default dark
+      if (currentThemeId === 'pure-white') bgColor = '#ffffff';
+      else if (currentThemeId === 'engineering') bgColor = '#fefce8';
+      else if (currentThemeId === 'antigravity') bgColor = '#020617';
 
       const canvas = await (window as any).html2canvas(container, {
-        backgroundColor: '#030712',
+        backgroundColor: bgColor,
         scale: 2, 
         useCORS: true,
         logging: false,
-        onclone: (clonedDoc: Document) => {
-          const clonedContainer = clonedDoc.querySelector('[data-export-container="true"]') as HTMLElement;
-          if (clonedContainer) {
-            clonedContainer.style.visibility = 'visible';
-            clonedContainer.style.left = '0';
-          }
-        }
+        height: container.scrollHeight,
+        windowHeight: container.scrollHeight,
       });
-
-      // Restore original state
-      container.style.left = originalLeft;
-      container.style.visibility = originalVisibility;
-      container.style.zIndex = '-50';
 
       const link = document.createElement('a');
       link.download = `MESE_Vibration_Analysis_${fileName.split('.')[0] || 'Report'}.png`;
@@ -526,6 +524,76 @@ const App: React.FC = () => {
 
   return (
     <div className={`h-screen w-screen ${theme.bgApp} ${theme.textPrimary} font-sans flex flex-col overflow-hidden`}>
+      {/* --- HIDDEN EXPORT CONTAINER (OFF-SCREEN) --- */}
+      {/* This renders all charts (AX, AY, AZ, FFTs, VZ, SZ) for the "Full Report" export functionality */}
+      <div 
+        ref={exportContainerRef}
+        className={`fixed top-0 left-[-9999px] w-[1000px] ${theme.bgApp} ${theme.textPrimary} p-8 z-[-1]`}
+        style={{ visibility: 'visible' }} // Must be visible for html2canvas, but off-screen
+      >
+        <div className="mb-8 border-b border-gray-700 pb-4">
+          <h1 className="text-3xl font-bold mb-2">MESE Vibration Analysis Report</h1>
+          <p className="text-sm opacity-70">File: {fileName} | Date: {new Date().toLocaleString()}</p>
+        </div>
+
+        {/* 1. Vibration Section (3 Charts) */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">1. Vibration (Acceleration)</h2>
+          <div className="space-y-4">
+            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
+               <p className="text-xs font-bold mb-1 opacity-70">X-Axis (AX)</p>
+               <TimeChart data={displayData} axis="ax" color={theme.chartColors.ax} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
+            </div>
+            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
+               <p className="text-xs font-bold mb-1 opacity-70">Y-Axis (AY)</p>
+               <TimeChart data={displayData} axis="ay" color={theme.chartColors.ay} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
+            </div>
+            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
+               <p className="text-xs font-bold mb-1 opacity-70">Z-Axis (AZ)</p>
+               <TimeChart data={displayData} axis="az" color={theme.chartColors.az} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} />
+            </div>
+          </div>
+        </div>
+
+        {/* 2. FFT Section (3 Charts) */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 border-l-4 border-purple-500 pl-3">2. Frequency Analysis (FFT)</h2>
+          <div className="grid grid-cols-1 gap-4">
+             {allFFTs && (
+               <>
+                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
+                   <p className="text-xs font-bold mb-1 opacity-70">X-Axis FFT</p>
+                   <FFTChart data={allFFTs.ax} color={theme.chartColors.ax} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                </div>
+                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
+                   <p className="text-xs font-bold mb-1 opacity-70">Y-Axis FFT</p>
+                   <FFTChart data={allFFTs.ay} color={theme.chartColors.ay} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                </div>
+                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
+                   <p className="text-xs font-bold mb-1 opacity-70">Z-Axis FFT</p>
+                   <FFTChart data={allFFTs.az} color={theme.chartColors.az} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                </div>
+               </>
+             )}
+          </div>
+        </div>
+
+        {/* 3. Kinematics Section (2 Charts) */}
+        <div className="mb-8">
+          <h2 className="text-xl font-bold mb-4 border-l-4 border-orange-500 pl-3">3. Kinematics</h2>
+          <div className="space-y-4">
+            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
+               <p className="text-xs font-bold mb-1 opacity-70">Velocity (VZ)</p>
+               <TimeChart data={displayData} axis="vz" color={theme.chartColors.vz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+            </div>
+            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
+               <p className="text-xs font-bold mb-1 opacity-70">Displacement (SZ)</p>
+               <TimeChart data={displayData} axis="sz" color={theme.chartColors.sz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <header className={`flex-none border-b ${theme.border} ${theme.bgCard} backdrop-blur-md z-50 print:hidden`}>
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1 min-w-0">
