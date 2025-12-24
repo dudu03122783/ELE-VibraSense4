@@ -5,6 +5,7 @@ import { TimeChart, FFTChart } from './components/Charts.tsx';
 import { calculateFFT, calculateStats, downsampleData, processVibrationData, calculateLiftBoundaries, calculateIsoStats } from './utils/mathUtils.ts';
 import { applyFilters } from './utils/dspUtils.ts';
 import { analyzeWithGemini } from './services/geminiService.ts';
+import { getMachineSpecs, calculateMachineFreqs, MachineSpec, TheoreticalFreqs } from './utils/machineData.ts';
 import { ProcessedDataPoint, DataAxis, AnalysisStats, AIAnalysisResult, ThemeConfig, FilterConfig, RawDataPoint, ElevatorBoundaries, IsoStats } from './types.ts';
 
 const DEFAULT_SAMPLE_RATE = 1600;
@@ -76,7 +77,17 @@ const TRANSLATIONS = {
     kalmanR: '测量噪声 R (平滑度)',
     dataSettings: '数据源设置',
     sampleRate: '采样频率 (Hz)',
-    sampleRateNote: '修改后系统将重新计算时间轴、速度和位移'
+    sampleRateNote: '修改后系统将重新计算时间轴、速度和位移',
+    theoretical: '理论频率显示',
+    theoreticalHide: '理论频率隐藏',
+    theoModalTitle: '理论频率计算参数',
+    machineModel: '曳引机型号',
+    speed: '电梯额定速度 (m/s)',
+    ropeType: '钢丝绳类型',
+    normalRope: '普通钢丝绳',
+    sflexRope: 'Sflex 钢丝绳',
+    showTable: '显示理论值',
+    hideTable: '隐藏'
   },
   en: {
     title: 'MESE ELEVATOR VIBRATION ANALYSIS SYSTEM',
@@ -143,7 +154,17 @@ const TRANSLATIONS = {
     kalmanR: 'Measure Noise R (Smoothness)',
     dataSettings: 'Data Settings',
     sampleRate: 'Sampling Rate (Hz)',
-    sampleRateNote: 'Changing this will re-calculate time, velocity and displacement'
+    sampleRateNote: 'Changing this will re-calculate time, velocity and displacement',
+    theoretical: 'Theoretical Freqs',
+    theoreticalHide: 'Hide Theo Freqs',
+    theoModalTitle: 'Theoretical Freq Parameters',
+    machineModel: 'Machine Model',
+    speed: 'Rated Speed (m/s)',
+    ropeType: 'Rope Type',
+    normalRope: 'Normal',
+    sflexRope: 'Sflex',
+    showTable: 'Show Values',
+    hideTable: 'Hide'
   }
 };
 
@@ -236,6 +257,15 @@ const App: React.FC = () => {
     kalmanR: 1.0
   });
 
+  // Theoretical Freq States
+  const [showTheoModal, setShowTheoModal] = useState(false);
+  const [showTheoLines, setShowTheoLines] = useState(false);
+  const [machineSpecs] = useState<MachineSpec[]>(getMachineSpecs());
+  const [selectedMachine, setSelectedMachine] = useState<string>(machineSpecs[0]?.model || '');
+  const [ratedSpeed, setRatedSpeed] = useState<number>(1.0);
+  const [ropeType, setRopeType] = useState<'normal' | 'sflex'>('normal');
+  const [theoFreqs, setTheoFreqs] = useState<TheoreticalFreqs | null>(null);
+
   const [currentThemeId, setCurrentThemeId] = useState<string>('antigravity');
   const theme = useMemo(() => THEMES.find(t => t.id === currentThemeId) || THEMES[0], [currentThemeId]);
 
@@ -271,6 +301,21 @@ const App: React.FC = () => {
     setRawData(raw);
     setFileName(name);
   };
+
+  // Recalculate theoretical freqs when parameters change
+  useEffect(() => {
+    if (showTheoLines) {
+      const spec = machineSpecs.find(m => m.model === selectedMachine);
+      if (spec) {
+        const freqs = calculateMachineFreqs(spec, ratedSpeed, ropeType);
+        setTheoFreqs(freqs);
+      } else {
+        setTheoFreqs(null);
+      }
+    } else {
+      setTheoFreqs(null);
+    }
+  }, [showTheoLines, selectedMachine, ratedSpeed, ropeType, machineSpecs]);
 
   useEffect(() => {
     if (!rawData) return;
@@ -521,6 +566,66 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* --- THEORETICAL FREQS MODAL --- */}
+      {showTheoModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
+          <div className={`${theme.bgPanel} border ${theme.border} rounded-xl shadow-2xl p-6 w-96`}>
+            <div className="flex justify-between items-center mb-4">
+               <h3 className="text-lg font-bold">{t.theoModalTitle}</h3>
+               <button onClick={() => setShowTheoModal(false)} className="text-gray-500 hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></button>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className={`block text-xs font-bold ${theme.textSecondary} mb-1`}>{t.machineModel}</label>
+                <select 
+                  value={selectedMachine} 
+                  onChange={(e) => setSelectedMachine(e.target.value)} 
+                  className={`w-full text-sm p-2 rounded border ${theme.border} bg-gray-900 ${theme.textPrimary}`}
+                >
+                  {machineSpecs.map((m, idx) => (
+                    <option key={idx} value={m.model}>{m.model} ({m.type})</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className={`block text-xs font-bold ${theme.textSecondary} mb-1`}>{t.speed}</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={ratedSpeed} 
+                  onChange={(e) => setRatedSpeed(parseFloat(e.target.value))} 
+                  className={`w-full text-sm p-2 rounded border ${theme.border} bg-gray-900 ${theme.textPrimary}`} 
+                />
+              </div>
+
+              <div>
+                <label className={`block text-xs font-bold ${theme.textSecondary} mb-1`}>{t.ropeType}</label>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setRopeType('normal')}
+                    className={`flex-1 py-2 text-xs rounded border ${ropeType === 'normal' ? `${theme.border} bg-indigo-600 text-white` : `${theme.border} bg-gray-900 ${theme.textSecondary}`}`}
+                  >
+                    {t.normalRope}
+                  </button>
+                  <button 
+                    onClick={() => setRopeType('sflex')}
+                    className={`flex-1 py-2 text-xs rounded border ${ropeType === 'sflex' ? `${theme.border} bg-indigo-600 text-white` : `${theme.border} bg-gray-900 ${theme.textSecondary}`}`}
+                  >
+                    {t.sflexRope}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+               <button onClick={() => { setShowTheoLines(true); setShowTheoModal(false); }} className="w-full py-2 bg-teal-600 hover:bg-teal-500 text-white rounded font-bold transition-colors">{t.showTable}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showExportModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
           <div className={`${theme.bgPanel} border ${theme.border} rounded-xl shadow-2xl p-6 w-80`}>
@@ -545,6 +650,7 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden relative">
         <aside className={`${isSidebarOpen ? 'w-full lg:w-80 translate-x-0' : 'w-0 -translate-x-full hidden'} ${theme.bgPanel} border-r ${theme.border} flex flex-col z-40 shrink-0 transition-all duration-300 print:hidden h-full overflow-y-auto`}>
           <div className="p-6 space-y-6 pb-20">
+            {/* ... Existing Sidebar Content ... */}
             
             <div className={`${theme.bgCard} rounded-xl p-4 border ${theme.border} shadow-sm`}>
               <div className="flex justify-between items-center mb-3"><h3 className={`text-xs font-bold ${theme.textSecondary} uppercase flex items-center gap-2`}><span className={`w-1.5 h-1.5 rounded-full ${theme.accent.replace('text-', 'bg-')}`}></span>{t.globalStats} ({accelAxis.toUpperCase()})</h3><label className="flex items-center gap-2 cursor-pointer"><span className={`text-[10px] ${theme.textSecondary}`}>{t.showBoundaries}</span><input type="checkbox" checked={showIsoBoundaries} onChange={(e) => setShowIsoBoundaries(e.target.checked)} className="rounded border-gray-600 bg-gray-800 focus:ring-0 w-3 h-3"/></label></div>
@@ -709,9 +815,37 @@ const App: React.FC = () => {
             <div className={`${theme.bgCard} border ${theme.border} rounded-xl p-4 shadow-sm flex flex-col shrink-0`} style={{ height: chartHeight }}>
               <div className="flex justify-between items-center mb-4 shrink-0">
                 <h2 className={`text-sm font-bold ${theme.textSecondary} flex items-center gap-2`}>{t.fft} ({accelAxis.toUpperCase()}) {fftMode === 'constVel' ? `(${t.constVelFFT})` : `(${t.windowAnalysis})`}</h2>
-                <div className="flex items-center gap-4"><span className={`text-xs ${theme.textSecondary}`}>{t.dominant}: {peakFreq?.freq.toFixed(2)}Hz</span><button onClick={() => setIsFFTVisible(false)} className={`text-[10px] p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors ${theme.textSecondary}`} title={t.hideChart}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></button></div>
+                <div className="flex items-center gap-4">
+                  <span className={`text-xs ${theme.textSecondary}`}>{t.dominant}: {peakFreq?.freq.toFixed(2)}Hz</span>
+                  
+                  {/* Theoretical Frequency Button */}
+                  <button 
+                    onClick={() => {
+                      if (showTheoLines) {
+                        setShowTheoLines(false);
+                      } else {
+                        setShowTheoModal(true);
+                      }
+                    }}
+                    className={`text-[10px] px-2 py-1 rounded bg-teal-600 hover:bg-teal-500 text-white shadow transition-colors font-bold ${showTheoLines ? 'ring-2 ring-teal-400' : ''}`}
+                    title={showTheoLines ? t.theoreticalHide : t.theoretical}
+                  >
+                    {showTheoLines ? t.theoreticalHide : t.theoretical}
+                  </button>
+
+                  <button onClick={() => setIsFFTVisible(false)} className={`text-[10px] p-1 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors ${theme.textSecondary}`} title={t.hideChart}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg></button>
+                </div>
               </div>
-              <div className="flex-1 min-h-0"><FFTChart data={fftData} color={theme.chartColors[accelAxis]} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode}/></div>
+              <div className="flex-1 min-h-0">
+                <FFTChart 
+                  data={fftData} 
+                  color={theme.chartColors[accelAxis]} 
+                  gridColor={theme.gridColor} 
+                  textColor={theme.textColorHex} 
+                  mode={fftMode}
+                  theoreticalFreqs={showTheoLines ? theoFreqs : null}
+                />
+              </div>
             </div>
             )}
 
@@ -719,112 +853,12 @@ const App: React.FC = () => {
             <div className={`${theme.bgCard} border ${theme.border} rounded-xl p-4 shadow-sm flex flex-col shrink-0`} style={{ height: chartHeight }}>
               <div className="flex justify-between items-center mb-4 shrink-0">
                 <div className="flex items-center gap-4"><h2 className={`text-sm font-bold ${theme.textSecondary} flex items-center gap-2`}><span className="w-2 h-2 rounded-sm" style={{backgroundColor: theme.chartColors[intAxis]}}></span>{t.kinematics}</h2><div className={`flex rounded border ${theme.border} p-0.5 print:hidden`}>{['vz', 'sz'].map((ax) => <button key={ax} onClick={() => setIntAxis(ax as DataAxis)} className={`px-2 py-0.5 text-xs font-bold rounded ${intAxis === ax ? `bg-gray-500/20 ${theme.textPrimary}` : theme.textSecondary}`}>{ax.toUpperCase()}</button>)}</div></div>
-                <div className="flex items-center gap-3 print:hidden"><div className="flex items-center gap-1"><span className={`text-[10px] ${theme.textSecondary}`}>{t.yScale}</span><input placeholder="Min" className={`w-12 text-[10px] p-1 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`} value={yMinInt} onChange={(e) => setYMinInt(e.target.value)}/><input placeholder="Max" className={`w-12 text-[10px] p-1 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`} value={yMaxInt} onChange={(e) => setYMaxInt(e.target.value)}/></div><div className={`w-px h-4 bg-gray-700 mx-1`}></div><button onClick={handleResetLayout} className={`p-1.5 rounded border ${theme.border} hover:bg-gray-500/20 ${theme.textPrimary} ml-1`} title={t.resetLayout}><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button></div>
+                <div className="flex items-center gap-3 print:hidden"><div className="flex items-center gap-1"><span className={`text-[10px] ${theme.textSecondary}`}>{t.refLines}</span><select value={refLineLevel || 0} onChange={(e) => setRefLineLevel(Number(e.target.value) || null)} className={`text-[10px] p-1 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`}><option value="0" className="bg-gray-900 text-gray-100">Off</option><option value="10" className="bg-gray-900 text-gray-100">±10</option><option value="15" className="bg-gray-900 text-gray-100">±15</option></select></div><div className="flex items-center gap-1"><span className={`text-[10px] ${theme.textSecondary}`}>{t.yScale}</span><input placeholder="Min" className={`w-12 text-[10px] p-1 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`} value={yMinInt} onChange={(e) => setYMinInt(e.target.value)}/><input placeholder="Max" className={`w-12 text-[10px] p-1 rounded border ${theme.border} bg-transparent ${theme.textPrimary}`} value={yMaxInt} onChange={(e) => setYMaxInt(e.target.value)}/></div><div className={`w-px h-4 bg-gray-700 mx-1`}></div><button onClick={handleResetLayout} className={`p-1.5 rounded border ${theme.border} hover:bg-gray-500/20 ${theme.textPrimary} ml-1`} title={t.resetLayout}><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></button></div>
               </div>
               <div className="flex-1 min-h-0"><TimeChart data={displayData} axis={intAxis} color={theme.chartColors[intAxis]} syncId="timeSync" windowRange={{ start: windowStart, end: windowStart + windowSize }} onChartClick={handleChartClick} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} yDomain={parseDomain(yMinInt, yMaxInt)} xDomain={viewDomain || undefined} onZoom={handleZoom} gridColor={theme.gridColor} textColor={theme.textColorHex} brushColor={theme.brushColor}/></div>
             </div>
             )}
         </div>
-
-      {/* --- EXPORT FULL REPORT CONTAINER (HIDDEN BUT CAPTURABLE) --- */}
-      <div 
-        ref={exportContainerRef} 
-        data-export-container="true"
-        className={`fixed top-0 left-0 -z-50 pointer-events-none ${theme.bgApp} ${theme.textPrimary}`} 
-        style={{ width: '1200px', left: '-9999px', visibility: 'hidden' }} 
-      >
-        <div className="p-8 space-y-8 bg-gray-950">
-           <div className="border-b border-gray-700 pb-4 mb-8">
-             <div className="flex justify-between items-center">
-               <div>
-                 <h1 className="text-3xl font-bold">Vibration Analysis Report (全套分析报告)</h1>
-                 <p className="text-xl opacity-70 mt-2">{fileName}</p>
-                 <p className="text-sm opacity-50 mt-1">{new Date().toLocaleString()}</p>
-               </div>
-               <img src="/logo.png" className="h-16 w-16 object-contain" />
-             </div>
-           </div>
-
-           {/* Vibration Block: AX, AY, AZ */}
-           {['ax', 'ay', 'az'].map((axis) => {
-             let stats: { constVel?: AnalysisStats, global?: AnalysisStats } = {};
-             if (isoStats) { 
-               if (axis === 'ax') stats.constVel = isoStats.x.constVel; 
-               if (axis === 'ay') stats.constVel = isoStats.y.constVel; 
-               if (axis === 'az') { stats.constVel = isoStats.z.constVel; stats.global = isoStats.z.global; }
-             }
-             if (!stats.global && finalProcessedData && axis !== 'az') {
-                stats.global = calculateStats(finalProcessedData, axis as DataAxis);
-             }
-
-             return (
-              <div key={axis} className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col mb-8 min-h-[500px]">
-                <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-sm" style={{backgroundColor: theme.chartColors[axis as DataAxis]}}></span>
-                  Vibration {axis.toUpperCase()}
-                </h3>
-                <div className="grid grid-cols-4 gap-6 mb-6 text-xs p-4 bg-white/5 rounded-lg">
-                   <div className="flex flex-col border-l-2 border-teal-500 pl-3">
-                     <span className="opacity-60 font-bold mb-1">{t.t1t2} (Const Vel)</span>
-                     <div className="space-y-1">
-                       <div className="flex justify-between"><span>A95:</span><span className="font-mono font-bold">{stats.constVel?.a95.toFixed(3)}</span></div>
-                       <div className="flex justify-between"><span>Max Pk-Pk:</span><span className="font-mono font-bold">{stats.constVel?.pkPk.toFixed(3)}</span></div>
-                       <div className="flex justify-between"><span>Max 0-Pk:</span><span className="font-mono font-bold">{stats.constVel?.zeroPk.toFixed(3)}</span></div>
-                     </div>
-                   </div>
-                   <div className="flex flex-col border-l-2 border-yellow-500 pl-3">
-                     <span className="opacity-60 font-bold mb-1">{t.t0t3} (Global Max)</span>
-                     <div className="space-y-1">
-                       <div className="flex justify-between"><span>Max Pk-Pk:</span><span className="font-mono font-bold text-yellow-500">{stats.global?.pkPk.toFixed(3)}</span></div>
-                       <div className="flex justify-between"><span>Max 0-Pk:</span><span className="font-mono font-bold">{stats.global?.zeroPk.toFixed(3)}</span></div>
-                     </div>
-                   </div>
-                </div>
-                <div className="h-[350px] w-full">
-                  <TimeChart 
-                    data={displayData} 
-                    axis={axis as DataAxis} 
-                    color={theme.chartColors[axis as DataAxis]} 
-                    globalStats={axis === 'az' ? { ...stats.constVel!, pkPk: stats.global?.pkPk || 0, maxPkPkPair: stats.global?.maxPkPkPair } : stats.constVel} 
-                    verticalLines={isoVerticalLines} 
-                    highlightAreas={isoHighlightAreas} 
-                    gridColor={theme.gridColor} 
-                    textColor={theme.textColorHex}
-                  />
-                </div>
-              </div>
-            );
-           })}
-
-           {/* FFT Block */}
-           <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col mb-8 min-h-[500px]">
-             <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">FFT Frequency Analysis ({accelAxis.toUpperCase()})</h3>
-             {windowStats && peakFreq && (
-               <div className="grid grid-cols-4 gap-6 mb-6 text-xs p-4 bg-white/5 rounded-lg">
-                 <div className="flex flex-col"><span className="opacity-50">RMS (aw)</span><span className="font-mono text-lg font-bold">{windowStats.rms.toFixed(3)}</span></div>
-                 <div className="flex flex-col"><span className="opacity-50">Peak</span><span className="font-mono text-lg font-bold">{windowStats.peakVal.toFixed(3)}</span></div>
-                 <div className="flex flex-col"><span className="opacity-50">Dominant Freq</span><span className="font-mono text-lg font-bold text-purple-400">{peakFreq.freq.toFixed(2)} Hz</span></div>
-                 <div className="flex flex-col"><span className="opacity-50">Magnitude</span><span className="font-mono text-lg font-bold">{(peakFreq.mag * 1.4142).toFixed(4)}</span></div>
-               </div>
-             )}
-             <div className="h-[400px] w-full">
-               <FFTChart data={fftData} color={theme.chartColors[accelAxis]} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode}/>
-             </div>
-           </div>
-
-           {/* Kinematics Block: VZ, SZ */}
-           <div className="space-y-8">
-             <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col h-[400px]">
-               <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">Velocity (Vz)</h3>
-               <TimeChart data={displayData} axis="vz" color={theme.chartColors.vz} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/>
-             </div>
-             <div className="border border-gray-700/50 rounded-xl p-6 bg-gray-900/40 flex flex-col h-[400px]">
-               <h3 className="text-xl font-bold mb-4 uppercase flex items-center gap-2">Displacement (Sz)</h3>
-               <TimeChart data={displayData} axis="sz" color={theme.chartColors.sz} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} gridColor={theme.gridColor} textColor={theme.textColorHex}/>
-             </div>
-           </div>
-        </div>
-      </div>
       </main>
     </div>
   );

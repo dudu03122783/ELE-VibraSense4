@@ -5,6 +5,7 @@ import {
   AreaChart, Area, ReferenceArea, ReferenceLine, Label, ReferenceDot
 } from 'recharts';
 import { FFTResult, ProcessedDataPoint, DataAxis, AnalysisStats } from '../types';
+import { TheoreticalFreqs } from '../utils/machineData.ts';
 
 interface VerticalLineDef {
   x: number;
@@ -287,6 +288,7 @@ interface FFTChartProps {
   gridColor?: string;
   textColor?: string;
   mode?: 'window' | 'constVel';
+  theoreticalFreqs?: TheoreticalFreqs | null;
 }
 
 // Custom Shape for Right-Aligned Label
@@ -323,7 +325,8 @@ export const FFTChart: React.FC<FFTChartProps> = ({
   color,
   gridColor = "#374151",
   textColor = "#9ca3af",
-  mode = 'window'
+  mode = 'window',
+  theoreticalFreqs
 }) => {
   const [zoomDomain, setZoomDomain] = useState<[number, number] | null>(null);
   const [refAreaLeft, setRefAreaLeft] = useState<number | null>(null);
@@ -361,7 +364,6 @@ export const FFTChart: React.FC<FFTChartProps> = ({
   }, [visibleData]);
 
   // 计算自适应的 X 轴最大值
-  // 窗口分析模式上限 300Hz, 匀速阶段全局模式上限 800Hz
   const defaultXMax = useMemo(() => {
     if (data.length === 0) return mode === 'window' ? 300 : 800;
     const maxDataFreq = data[data.length - 1].frequency;
@@ -371,6 +373,53 @@ export const FFTChart: React.FC<FFTChartProps> = ({
 
   return (
     <div className="h-full w-full relative group">
+      
+      {/* Horizontal Theoretical Freq Table (Floating Top) */}
+      {theoreticalFreqs && (
+        <div className="absolute top-1 right-12 z-20 flex items-center gap-4 bg-gray-900/80 backdrop-blur border border-gray-700 px-4 py-2 rounded-lg text-[10px] text-gray-300 shadow-xl pointer-events-none select-none">
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-green-400 font-bold scale-90">F1(咬合)</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f1.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+          
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-green-400 font-bold scale-90 opacity-80">F2(吊轮咬合)</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f2.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-blue-400 font-bold scale-90">F3(绳轮)</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f3.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-orange-400 font-bold scale-90">FS(槽数)</span>
+            <span className="font-mono text-white">{theoreticalFreqs.fs.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-red-400 font-bold scale-90">1f(马达基频)</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f1elec.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-red-400 font-bold scale-90">2f</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f2elec.toFixed(2)}Hz</span>
+          </div>
+          <div className="w-px h-6 bg-gray-700"></div>
+
+          <div className="flex flex-col items-center leading-tight">
+            <span className="text-red-400 font-bold scale-90">6f</span>
+            <span className="font-mono text-white">{theoreticalFreqs.f6elec.toFixed(2)}Hz</span>
+          </div>
+        </div>
+      )}
+
       {zoomDomain && (
         <button 
           onClick={resetZoom}
@@ -428,6 +477,39 @@ export const FFTChart: React.FC<FFTChartProps> = ({
             fill={`url(#colorSplit-${color})`} 
             isAnimationActive={false}
           />
+
+          {theoreticalFreqs && (
+            <>
+              {/* F1: Rope Meshing - Green Dotted */}
+              <ReferenceLine x={theoreticalFreqs.f1} stroke="#4ade80" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.7}>
+                 <Label value="F1" position="top" fill="#4ade80" fontSize={10} />
+              </ReferenceLine>
+              {/* F2: 2:1 Pulley - Green Dotted */}
+              <ReferenceLine x={theoreticalFreqs.f2} stroke="#4ade80" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.7}>
+                 <Label value="F2" position="top" fill="#4ade80" fontSize={10} />
+              </ReferenceLine>
+              {/* F3: Sheave Rotation - Blue Dotted */}
+              <ReferenceLine x={theoreticalFreqs.f3} stroke="#60a5fa" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.7}>
+                 <Label value="F3" position="top" fill="#60a5fa" fontSize={10} />
+              </ReferenceLine>
+              {/* FS: Slot Ripple - Orange Dotted */}
+              <ReferenceLine x={theoreticalFreqs.fs} stroke="#fb923c" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.7}>
+                 <Label value="FS" position="top" fill="#fb923c" fontSize={10} />
+              </ReferenceLine>
+              {/* 1f: Motor Elec - Red Dotted */}
+              <ReferenceLine x={theoreticalFreqs.f1elec} stroke="#f87171" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.7}>
+                 <Label value="1f" position="top" fill="#f87171" fontSize={10} />
+              </ReferenceLine>
+              {/* 2f */}
+              <ReferenceLine x={theoreticalFreqs.f2elec} stroke="#f87171" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.5}>
+                 <Label value="2f" position="top" fill="#f87171" fontSize={10} />
+              </ReferenceLine>
+              {/* 6f */}
+              <ReferenceLine x={theoreticalFreqs.f6elec} stroke="#f87171" strokeDasharray="3 3" strokeWidth={1.5} opacity={0.5}>
+                 <Label value="6f" position="top" fill="#f87171" fontSize={10} />
+              </ReferenceLine>
+            </>
+          )}
 
           {refAreaLeft !== null && refAreaRight !== null && (
             <ReferenceArea 

@@ -97,3 +97,11 @@ export interface FilterConfig {
   kalmanQ: number; // Process Noise (Sensitivity)
   kalmanR: number; // Measurement Noise (Smoothness)
 }
+
+export interface TheoreticalFreqs {
+  f1: number; // 钢丝绳咬合
+  f2: number; // 2:1 返绳轮
+  f3: number; // 绳轮转动
+  fs: number; // 转矩脉动 (槽数)
+  f1elec: number; // 马达电频率
+}
