@@ -87,7 +87,18 @@ const TRANSLATIONS = {
     normalRope: '普通钢丝绳',
     sflexRope: 'Sflex 钢丝绳',
     showTable: '显示理论值',
-    hideTable: '隐藏'
+    hideTable: '隐藏',
+    // Report Translations
+    reportTitle: 'MESE 电梯振动分析报告',
+    reportFile: '文件',
+    reportDate: '日期',
+    reportMetric: '指标',
+    reportAxisX: 'X 轴 (Gals)',
+    reportAxisY: 'Y 轴 (Gals)',
+    reportAxisZ: 'Z 轴 (Gals)',
+    reportVibTitle: '1. 振动 (加速度)',
+    reportFftTitle: '2. 频谱分析 (FFT)',
+    reportKinTitle: '3. 运动学 (速度/位移)'
   },
   en: {
     title: 'MESE ELEVATOR VIBRATION ANALYSIS SYSTEM',
@@ -164,7 +175,18 @@ const TRANSLATIONS = {
     normalRope: 'Normal',
     sflexRope: 'Sflex',
     showTable: 'Show Values',
-    hideTable: 'Hide'
+    hideTable: 'Hide',
+    // Report Translations
+    reportTitle: 'MESE Vibration Analysis Report',
+    reportFile: 'File',
+    reportDate: 'Date',
+    reportMetric: 'Metric',
+    reportAxisX: 'X-Axis (Gals)',
+    reportAxisY: 'Y-Axis (Gals)',
+    reportAxisZ: 'Z-Axis (Gals)',
+    reportVibTitle: '1. Vibration (Acceleration)',
+    reportFftTitle: '2. Frequency Analysis (FFT)',
+    reportKinTitle: '3. Kinematics'
   }
 };
 
@@ -283,7 +305,7 @@ const App: React.FC = () => {
   const [windowStart, setWindowStart] = useState<number>(0);
   const [windowSize, setWindowSize] = useState<number>(4);
   
-  const [fftMode, setFftMode] = useState<'window' | 'constVel'>('window');
+  const [fftMode, setFftMode] = useState<'window' | 'constVel'>('constVel');
   
   const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -362,13 +384,14 @@ const App: React.FC = () => {
 
   // Compute FFT for all axes for the export feature
   const allFFTs = useMemo(() => {
-    if (fftSourceData.length === 0) return null;
+    // CRITICAL FIX: Only calculate when export modal is open to fix performance
+    if (!showExportModal || fftSourceData.length === 0) return null;
     return {
       ax: calculateFFT(fftSourceData.map(d => d.ax), sampleRate),
       ay: calculateFFT(fftSourceData.map(d => d.ay), sampleRate),
       az: calculateFFT(fftSourceData.map(d => d.az), sampleRate)
     };
-  }, [fftSourceData, sampleRate]);
+  }, [fftSourceData, sampleRate, showExportModal]);
 
   const currentGlobalStats = useMemo(() => {
     if (!isoStats) return null;
@@ -451,6 +474,9 @@ const App: React.FC = () => {
     
     setIsAnalyzing(true);
     
+    // Allow a brief moment for the hidden container to fully render charts
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     try {
       // Determine background color based on theme
       let bgColor = '#030712'; // Default dark
@@ -525,73 +551,124 @@ const App: React.FC = () => {
   return (
     <div className={`h-screen w-screen ${theme.bgApp} ${theme.textPrimary} font-sans flex flex-col overflow-hidden`}>
       {/* --- HIDDEN EXPORT CONTAINER (OFF-SCREEN) --- */}
-      {/* This renders all charts (AX, AY, AZ, FFTs, VZ, SZ) for the "Full Report" export functionality */}
+      {/* Performance Fix: Render contents strictly when modal is open */}
       <div 
         ref={exportContainerRef}
         className={`fixed top-0 left-[-9999px] w-[1000px] ${theme.bgApp} ${theme.textPrimary} p-8 z-[-1]`}
-        style={{ visibility: 'visible' }} // Must be visible for html2canvas, but off-screen
+        style={{ visibility: 'visible' }} 
       >
-        <div className="mb-8 border-b border-gray-700 pb-4">
-          <h1 className="text-3xl font-bold mb-2">MESE Vibration Analysis Report</h1>
-          <p className="text-sm opacity-70">File: {fileName} | Date: {new Date().toLocaleString()}</p>
-        </div>
+        {showExportModal && (
+          <>
+            <div className="mb-8 border-b border-gray-700 pb-4">
+              <h1 className="text-3xl font-bold mb-2">{t.reportTitle}</h1>
+              <p className="text-sm opacity-70">{t.reportFile}: {fileName} | {t.reportDate}: {new Date().toLocaleString()}</p>
+            </div>
 
-        {/* 1. Vibration Section (3 Charts) */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">1. Vibration (Acceleration)</h2>
-          <div className="space-y-4">
-            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
-               <p className="text-xs font-bold mb-1 opacity-70">X-Axis (AX)</p>
-               <TimeChart data={displayData} axis="ax" color={theme.chartColors.ax} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
-            </div>
-            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
-               <p className="text-xs font-bold mb-1 opacity-70">Y-Axis (AY)</p>
-               <TimeChart data={displayData} axis="ay" color={theme.chartColors.ay} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
-            </div>
-            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
-               <p className="text-xs font-bold mb-1 opacity-70">Z-Axis (AZ)</p>
-               <TimeChart data={displayData} axis="az" color={theme.chartColors.az} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} />
-            </div>
-          </div>
-        </div>
+            {/* --- ISO STATISTICS TABLE --- */}
+            <div className="mb-8 border border-gray-700 rounded-xl overflow-hidden bg-gray-900/50 p-4">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-teal-500"></span> {t.globalStats}
+              </h3>
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                  <div className="font-bold text-gray-400 border-b border-gray-700 pb-2">{t.reportMetric}</div>
+                  <div className="font-bold text-red-400 border-b border-gray-700 pb-2">{t.reportAxisX}</div>
+                  <div className="font-bold text-green-400 border-b border-gray-700 pb-2">{t.reportAxisY}</div>
+                  <div className="font-bold text-blue-400 border-b border-gray-700 pb-2">{t.reportAxisZ}</div>
+                  
+                  {/* Row 1: A95 */}
+                  <div className="text-gray-300 py-1">{t.a95} ({t.t1t2})</div>
+                  <div className="font-mono py-1">{isoStats?.x.constVel.a95.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.y.constVel.a95.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.z.constVel.a95.toFixed(3)}</div>
 
-        {/* 2. FFT Section (3 Charts) */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 border-l-4 border-purple-500 pl-3">2. Frequency Analysis (FFT)</h2>
-          <div className="grid grid-cols-1 gap-4">
-             {allFFTs && (
-               <>
-                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
-                   <p className="text-xs font-bold mb-1 opacity-70">X-Axis FFT</p>
-                   <FFTChart data={allFFTs.ax} color={theme.chartColors.ax} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
-                </div>
-                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
-                   <p className="text-xs font-bold mb-1 opacity-70">Y-Axis FFT</p>
-                   <FFTChart data={allFFTs.ay} color={theme.chartColors.ay} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
-                </div>
-                <div className="h-56 border border-gray-800 rounded p-2 bg-gray-900/50">
-                   <p className="text-xs font-bold mb-1 opacity-70">Z-Axis FFT</p>
-                   <FFTChart data={allFFTs.az} color={theme.chartColors.az} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
-                </div>
-               </>
-             )}
-          </div>
-        </div>
+                  {/* Row 2: Pk-Pk Const Vel */}
+                  <div className="text-gray-300 py-1">{t.maxPkPk} ({t.t1t2})</div>
+                  <div className="font-mono py-1">{isoStats?.x.constVel.pkPk.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.y.constVel.pkPk.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.z.constVel.pkPk.toFixed(3)}</div>
 
-        {/* 3. Kinematics Section (2 Charts) */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold mb-4 border-l-4 border-orange-500 pl-3">3. Kinematics</h2>
-          <div className="space-y-4">
-            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
-               <p className="text-xs font-bold mb-1 opacity-70">Velocity (VZ)</p>
-               <TimeChart data={displayData} axis="vz" color={theme.chartColors.vz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+                  {/* Row 3: 0-Pk Const Vel (New Feature) */}
+                  <div className="text-gray-300 py-1">{t.max0Pk} ({t.t1t2})</div>
+                  <div className="font-mono py-1">{isoStats?.x.constVel.zeroPk.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.y.constVel.zeroPk.toFixed(3)}</div>
+                  <div className="font-mono py-1">{isoStats?.z.constVel.zeroPk.toFixed(3)}</div>
+
+                  {/* Row 4: Pk-Pk Total */}
+                  <div className="text-gray-300 py-1">{t.maxPkPk} ({t.t0t3})</div>
+                  <div className="font-mono text-gray-500 py-1">-</div>
+                  <div className="font-mono text-gray-500 py-1">-</div>
+                  <div className="font-mono text-yellow-500 py-1">{isoStats?.z.global?.pkPk.toFixed(3)}</div>
+              </div>
             </div>
-            <div className="h-48 border border-gray-800 rounded p-2 bg-gray-900/50">
-               <p className="text-xs font-bold mb-1 opacity-70">Displacement (SZ)</p>
-               <TimeChart data={displayData} axis="sz" color={theme.chartColors.sz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+
+            {/* 1. Vibration Section (3 Charts) */}
+            <div className="mb-8">
+              <h2 className="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3">{t.reportVibTitle}</h2>
+              <div className="space-y-4">
+                <div className="relative h-[200px] border border-gray-800 rounded p-2 bg-gray-900/50">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-xs font-bold opacity-70">X-Axis (AX)</p>
+                    {/* Added 0-Pk to headers */}
+                    <p className="text-[10px] font-mono opacity-60">A95: {isoStats?.x.constVel.a95.toFixed(2)} | Pk-Pk: {isoStats?.x.constVel.pkPk.toFixed(2)} | 0-Pk: {isoStats?.x.constVel.zeroPk.toFixed(2)}</p>
+                  </div>
+                  <TimeChart data={displayData} axis="ax" color={theme.chartColors.ax} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
+                </div>
+                <div className="relative h-[200px] border border-gray-800 rounded p-2 bg-gray-900/50">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-xs font-bold opacity-70">Y-Axis (AY)</p>
+                    <p className="text-[10px] font-mono opacity-60">A95: {isoStats?.y.constVel.a95.toFixed(2)} | Pk-Pk: {isoStats?.y.constVel.pkPk.toFixed(2)} | 0-Pk: {isoStats?.y.constVel.zeroPk.toFixed(2)}</p>
+                  </div>
+                  <TimeChart data={displayData} axis="ay" color={theme.chartColors.ay} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} />
+                </div>
+                <div className="relative h-[200px] border border-gray-800 rounded p-2 bg-gray-900/50">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-xs font-bold opacity-70">Z-Axis (AZ)</p>
+                    <p className="text-[10px] font-mono opacity-60">A95: {isoStats?.z.constVel.a95.toFixed(2)} | Pk-Pk: {isoStats?.z.constVel.pkPk.toFixed(2)} | 0-Pk: {isoStats?.z.constVel.zeroPk.toFixed(2)}</p>
+                  </div>
+                  <TimeChart data={displayData} axis="az" color={theme.chartColors.az} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} highlightAreas={isoHighlightAreas} />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+
+            {/* 2. FFT Section (3 Charts) */}
+            <div className="mb-8">
+              <h2 className="text-xl font-bold mb-4 border-l-4 border-purple-500 pl-3">{t.reportFftTitle}</h2>
+              <div className="flex flex-col gap-4">
+                {allFFTs && (
+                  <>
+                    <div className="relative h-[250px] w-full border border-gray-800 rounded p-2 bg-gray-900/50">
+                      <p className="text-xs font-bold mb-1 opacity-70">X-Axis FFT</p>
+                      <FFTChart data={allFFTs.ax} color={theme.chartColors.ax} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                    </div>
+                    <div className="relative h-[250px] w-full border border-gray-800 rounded p-2 bg-gray-900/50">
+                      <p className="text-xs font-bold mb-1 opacity-70">Y-Axis FFT</p>
+                      <FFTChart data={allFFTs.ay} color={theme.chartColors.ay} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                    </div>
+                    <div className="relative h-[250px] w-full border border-gray-800 rounded p-2 bg-gray-900/50">
+                      <p className="text-xs font-bold mb-1 opacity-70">Z-Axis FFT</p>
+                      <FFTChart data={allFFTs.az} color={theme.chartColors.az} gridColor={theme.gridColor} textColor={theme.textColorHex} mode={fftMode} theoreticalFreqs={theoFreqs} />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 3. Kinematics Section (2 Charts) */}
+            <div className="mb-8">
+              <h2 className="text-xl font-bold mb-4 border-l-4 border-orange-500 pl-3">{t.reportKinTitle}</h2>
+              <div className="space-y-4">
+                <div className="relative h-[200px] border border-gray-800 rounded p-2 bg-gray-900/50">
+                  <p className="text-xs font-bold mb-1 opacity-70">Velocity (VZ)</p>
+                  <TimeChart data={displayData} axis="vz" color={theme.chartColors.vz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+                </div>
+                <div className="relative h-[200px] border border-gray-800 rounded p-2 bg-gray-900/50">
+                  <p className="text-xs font-bold mb-1 opacity-70">Displacement (SZ)</p>
+                  <TimeChart data={displayData} axis="sz" color={theme.chartColors.sz} windowRange={{ start: windowStart, end: windowStart + windowSize }} gridColor={theme.gridColor} textColor={theme.textColorHex} verticalLines={isoVerticalLines} />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <header className={`flex-none border-b ${theme.border} ${theme.bgCard} backdrop-blur-md z-50 print:hidden`}>
